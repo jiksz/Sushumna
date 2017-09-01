@@ -1,0 +1,13 @@
+[package]
+name = "common-types"
+description = "Common types used throughout the codebase"
+version = "0.1.0"
+authors = ["Cryptape"]
+
+[dependencies]
+rlp = { path = "../../share_libs/rlp" }
+util = { path = "../../share_libs/util" }
+bloomable = { path = "../../share_libs/bloomable" }
+sushumna-ed25519 = { path = "../../share_libs/ed25519" }
+libproto = { path = "../../share_libs/proto" }
+rustc-hex = "1.0"
