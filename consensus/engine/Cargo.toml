@@ -1,0 +1,14 @@
+[package]
+name = "engine"
+version = "0.6.0"
+authors = ["zhangsoledad <787953403@qq.com>"]
+
+[dependencies]
+libproto = {path = "../../share_libs/proto"}
+util = {path = "../../share_libs/util"}
+protobuf = { version = "^1.0.0" }
+sushumna-ed25519 = { path = "../../share_libs/ed25519" }
+engine_json = { path = "../json" }
+proof = { path = "../proof" }
+pubsub = { path = "../../share_libs/pubsub" }
+amqp = "=0.0.20"
