@@ -1,0 +1,234 @@
+#!/bin/bash
+# 1) source env.sh
+# 2) sushumna --setup
+# 3) sushumna --start
+# 4) sushumna --status|--chain|--consensus
+# 5) sushumna --stop
+bins="network chain consensus_tendermint jsonrpc"
+log_dir="$(pwd)/log"
+
+function sushumna_setup() {
+    mkdir -p ${log_dir}
+
+    node=node$1
+    echo "setup ${node}"
+    echo "WARN: This command will clean date of this node!!!"
+
+    # rabbitmq
+    sudo rabbitmqctl add_vhost ${node}
+    sudo rabbitmqctl set_permissions -p ${node} guest ".*" ".*" ".*"
+    sudo rabbitmqctl list_permissions -p ${node}
+
+    # clean up database and local data
+    rm -rf ./data
+}
+
+function sushumna_start() {
+    node=node$1
+    if [ ! -n "$2" ]; then
+        echo "starting ${node}"
+        nohup bin/network			    -c network.toml	     >${log_dir}/${node}.network    2>&1 &
+        echo $! >> .pid
+        nohup bin/consensus_tendermint	-c consensus.json	 >${log_dir}/${node}.consensus  2>&1 &
+        echo $! >> .pid
+        nohup bin/jsonrpc               -c jsonrpc.json	     >${log_dir}/${node}.jsonrpc    2>&1 &
+        echo $! >> .pid
+        nohup bin/chain					-c genesis.json		 >${log_dir}/${node}.chain	    2>&1 &
+        echo $! >> .pid
+    else
+        echo "starting ${node} debug"
+        RUST_LOG=network=trace nohup bin/network -c network.toml	     >${log_dir}/${node}.network    2>&1 &
+        echo $! >> .pid
+        RUST_LOG=consensus_tendermint,proof,txpool,engine=trace nohup bin/consensus_tendermint	-c consensus.json	 >${log_dir}/${node}.consensus  2>&1 &
+        echo $! >> .pid
+        RUST_LOG=jsonrpc,jsonrpc_types,transaction=trace nohup bin/jsonrpc -c jsonrpc.json	 >${log_dir}/${node}.jsonrpc    2>&1 &
+        echo $! >> .pid
+        RUST_LOG=chain,core,transaction=trace nohup bin/chain	-c genesis.json		 >${log_dir}/${node}.chain	    2>&1 &
+        echo $! >> .pid
+    fi
+    sushumna_status $1
+}
+
+function sushumna_stop(){
+    for pid in $(cat .pid)
+    do
+        kill -9 ${pid}
+    done
+    rm -f .pid
+    touch .pid
+    sushumna_status $1
+}
+
+function sushumna_restart() {
+	sushumna_setup $1
+	sushumna_stop $1
+	sushumna_start $1
+}
+
+function sushumna_status(){
+    for pid in $(cat .pid)
+    do
+        ps -A -o command:50,pid,time|grep ${pid} |grep -v "grep"
+    done
+}
+
+function sushumna_chain() {
+    node=node$1
+	tail -100f ${log_dir}/${node}.chain
+}
+function sushumna_consensus() {
+    node=node$1
+	tail -100f ${log_dir}/${node}.consensus
+}
+
+function sushumna_jsonrpc() {
+    node=node$1
+	tail -100f ${log_dir}/${node}.jsonrpc
+}
+
+function sushumna_network() {
+    node=node$1
+	tail -100f ${log_dir}/${node}.network
+}
+
+function sushumna_clean(){
+    node=node$1
+    rm -rf ${log_dir}/${node}.chain ${log_dir}/${node}.consensus ${log_dir}/${node}.network ${log_dir}/${node}.jsonrpc
+}
+
+function sushumna_disk(){
+    while :
+    do
+        echo
+        echo
+        echo "disk usage bytes $(du -s ./data)"
+        sleep 3
+    done
+}
+
+function sushumna_ram(){ 
+
+    pid_1=$(tail -4 .pid| head -1)
+    pid_2=$(tail -3 .pid| head -1)
+    pid_3=$(tail -2 .pid| head -1)
+    pid_4=$(tail -1 .pid)
+    while :
+    do
+        mem_link=$(free | grep "Mem" | awk '{print $2}')
+        mem_total=$[$mem_link*1024]
+        echo "the total memory:$mem_total"
+        vsize_1=$(cat /proc/$pid_1/stat | awk '{print $23}')   
+        vsize_2=$(cat /proc/$pid_2/stat | awk '{print $23}') 
+        vsize_3=$(cat /proc/$pid_3/stat | awk '{print $23}') 
+        vsize_4=$(cat /proc/$pid_4/stat | awk '{print $23}')  
+        rss_1=$(cat /proc/$pid_1/stat | awk '{print $24}')   
+        rss_2=$(cat /proc/$pid_2/stat | awk '{print $24}') 
+        rss_3=$(cat /proc/$pid_3/stat | awk '{print $24}') 
+        rss_4=$(cat /proc/$pid_4/stat | awk '{print $24}')
+
+        mem_node_total=$[vsize_1+vsize_2+vsize_3+vsize_4+rss_1+rss_2+rss_3+rss_4]
+        mem_network=$[vsize_1+rss_1]
+        mem_consensus_tende=$[vsize_2+rss_2]
+        mem_jsonrpc=$[vsize_3+rss_3]
+        mem_chain=$[vsize_4+rss_4]
+
+        echo "the node memory:$mem_node_total"
+        echo "the network memory:$mem_network"
+        echo "the consensus_tende memory:$mem_consensus_tende"
+        echo "the jsonrpc memory:$mem_jsonrpc"
+        echo "the chain memory:$mem_chain"
+        echo 
+        sleep 3
+    done
+}
+
+function sushumna_cpu(){
+    pid_1=$(tail -4 .pid| head -1)
+    pid_2=$(tail -3 .pid| head -1)
+    pid_3=$(tail -2 .pid| head -1)
+    pid_4=$(tail -1 .pid)
+    while :
+    do 
+        cpu_1=$(top -b -n 1 | grep $pid_1 | awk '{print $9}')
+        cpu_2=$(top -b -n 1 | grep $pid_2 | awk '{print $9}')
+        cpu_3=$(top -b -n 1| grep $pid_3 | awk '{print $9}')
+        cpu_4=$(top -b -n 1 | grep $pid_4 | awk '{print $9}')
+
+        cpu=$(echo $cpu_1+$cpu_2+$cpu_3+$cpu_4 | bc)
+
+        echo "the node cpu:$cpu%"
+        echo "the network cpu:$cpu_1%"
+        echo "the consensus_tende cpu:$cpu_2%"
+        echo "the jsonrpc cpu:$cpu_3%"
+        echo "the chain cpu:$cpu_4%"
+        echo 
+        sleep 3
+    done
+}
+
+function sushumna_help(){
+    echo
+    echo "      usage:      sushumna command nodeid"
+    echo
+    echo "      command description:"
+    echo
+    echo "      setup            setup sushumna run environment"
+    echo
+    echo "      start            start sushumna"
+    echo
+    echo "      stop             stop sushumna"
+    echo
+    echo "      restart          restart sushumna"
+    echo
+    echo "      status           display sushumna run status"
+    echo
+    echo "      jsonrpc          display sushumna's jsonrpc log information"
+    echo
+    echo "      chain            display sushumna's chain log information"
+    echo
+    echo "      consensus        display sushumna's consensus log information"
+    echo
+    echo "      network          display sushumna's network log information"
+    echo
+    echo "      clean            clean sushumna log file"
+    echo
+    echo "      version          display sushumna version"
+    echo
+    echo "      cpu              display sushumna's cpu information"
+    echo
+    echo "      ram              display sushumna's ram information"
+    echo
+    echo "      disk             display sushumna's disk information"
+    echo
+    echo "      help             display help information"
+    echo
+    echo
+}
+
+SCRIPT_PATH=$(cd `dirname $0`; pwd)
+
+if [ $# -gt 3 ];
+then
+    sushumna_help
+else
+    pushd $SCRIPT_PATH > /dev/null
+    case $1 in
+        setup) sushumna_setup $2;;
+        start) sushumna_start $2 $3;;
+        stop) sushumna_stop $2;;
+        restart) sushumna_restart $2;;
+        status) sushumna_status $2;;
+        jsonrpc) sushumna_jsonrpc $2;;
+        chain) sushumna_chain $2;;
+        consensus) sushumna_consensus $2;;
+        clean) sushumna_clean $2;;
+        network) sushumna_network $2;;
+        version) echo "0.9";;
+        cpu) sushumna_cpu $2;;
+        ram) sushumna_ram $2;;
+        disk) sushumna_disk $2;;
+        help) sushumna_help ;;
+        *) sushumna_help;;
+    esac
+    popd > /dev/null
+fi
