@@ -1,0 +1,5 @@
+FROM ubuntu:16.04
+ENV PATH $PATH:/sushumna/bin
+COPY . /sushumna
+RUN echo "/sushumna/lib" > /etc/ld.so.conf.d/sushumna.conf \
+	&& ldconfig
