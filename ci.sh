@@ -36,7 +36,7 @@ echo "##########################################################################
 echo "8) byzantine test"
 ./tests/integrate_test/sushumna_byzantinetest.sh
 
-echo "################################################################################"
+echo "###############################################################################"
 echo "9) archive result"
 mkdir -p ${WORKSPACE}/../archive/${BUILD_ID}
 mv ${WORKSPACE}/target  ${WORKSPACE}/../archive/${BUILD_ID}
