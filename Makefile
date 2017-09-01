@@ -51,7 +51,7 @@ bench:
           -not -path 'consensus/raft/*'                                           \
           -not -path 'consensus/capnp_nonblock/*'                                 \
           -exec cargo bench --manifest-path {} 2>&1 \; |tee -a target/bench.log
-	@echo "################################################################################"
+	@echo "###############################################################################"
 	@echo "bench error:"
 	@grep -A 2  'error\[' target/bench.log || exit 0
 	@echo "################################################################################"
